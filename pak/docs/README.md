@@ -3,8 +3,8 @@
 
 ## Config
 
-| Type  | Cvar | VM | Default | Description |
-|-|--|-|:-:|-|
+| Type  | Cvar                  | VM     | Default | Description                                                                                       |
+|-------|-----------------------|--------|:-------:|---------------------------------------------------------------------------------------------------|
 
 Supported movement types:
 VQ3

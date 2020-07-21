@@ -1,0 +1,28 @@
+And the plan is... make it up as I go.
+
+And here is what I have made up:
+
+Physics
+    VQ3
+    CPM - reverse engineered
+    Quake World - as close as possible
+    Q2 - partial if any
+Server side timing and storage system using a modified engine if necessary.
+
+Ideally, I will allow any physics type including custom, but that will have to be recorded along with the level completion stats. Since I 
+
+Priorities:
+    Get CPM working
+        For convenience.
+    Get timing triggers working
+        This is so that I can start and stop the timer.
+    Get timing working
+        Is usable at this point.
+    Get client side stat storage working
+        Is worthy of the name "Defrag".
+    Get server side stat storage working
+        This is to support the system below.
+    Get server stats display system working
+        !top and !speeds should work now.
+    Get QW movement working
+        Quake will live on!

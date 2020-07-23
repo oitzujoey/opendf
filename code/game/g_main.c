@@ -195,6 +195,8 @@ vmCvar_t g_ddRespawnDelay;
 vmCvar_t g_developer;
 vmCvar_t g_spSkill;
 vmCvar_t g_bot_noChat;
+/* opendf */
+vmCvar_t g_promode;
 
 mapinfo_result_t mapinfo;
 
@@ -412,7 +414,9 @@ static cvarTable_t gameCvarTable[] = {
 	/* Neon_Knight: Developer mode*/
 	{ &g_developer, "developer", "0", CVAR_CHEAT, 0, qtrue},
 	{ &g_spSkill, "g_spSkill", "2", 0, 0, qtrue},
-	{ &g_bot_noChat, "bot_nochat", "0", 0, 0, qtrue}
+	{ &g_bot_noChat, "bot_nochat", "0", 0, 0, qtrue},
+	/* opendf */
+	{ &g_promode, "g_promode", "0", CVAR_ARCHIVE, 0, qtrue}
 
 };
 

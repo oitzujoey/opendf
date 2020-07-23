@@ -425,6 +425,10 @@ struct gclient_s {
 	qboolean        spawnprotected;
 
 	int			accuracy[WP_NUM_WEAPONS][2];
+	qboolean	triggeredEntities[MAX_GENTITIES];
+	
+	int			dfStartTime;
+	int			dfEndTime;
 };
 
 
@@ -1178,6 +1182,8 @@ extern vmCvar_t g_ddRespawnDelay;
 extern vmCvar_t g_developer;
 extern vmCvar_t g_spSkill;
 extern vmCvar_t g_bot_noChat;
+// opendf
+extern vmCvar_t g_promode;
 
 void	trap_Printf( const char *fmt );
 void	trap_Error( const char *fmt ) __attribute__((noreturn));

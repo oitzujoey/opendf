@@ -39,7 +39,9 @@ float	pm_wadeScale = 0.70f;
 const float	pm_swimFastScale = 5.0f;
 
 float	pm_accelerate = 10.0f;
+float	pm_cpmaccelerate = 15.0f;
 float	pm_airaccelerate = 1.0f;
+float	pm_strafeaccelerate = 70.0f;
 float	pm_wateraccelerate = 4.0f;
 float	pm_flyaccelerate = 8.0f;
 
@@ -47,6 +49,8 @@ float	pm_friction = 6.0f;
 float	pm_waterfriction = 1.0f;
 float	pm_flightfriction = 3.0f;
 float	pm_spectatorfriction = 5.0f;
+
+float	pm_aircontrol = 0.02;
 
 int		c_pmove = 0;
 
@@ -244,9 +248,59 @@ static void PM_Friction( void )
 
 /*
 ==============
-PM_Accelerate
+PM_ProModeAccelerate
 
-TODO: bunny hoping
+Handles user intended acceleration
+==============
+*/
+static void PM_StrafeAccelerate( vec3_t wishdir, float wishspeed, float accel )
+{
+	if(! (pm->pmove_flags & DF_NO_BUNNY) ) {
+		// q2 style
+		int			i;
+		float		addspeed, accelspeed, currentspeed;
+
+		if (wishspeed > 30)
+			wishspeed = 30;
+
+		currentspeed = DotProduct (pm->ps->velocity, wishdir);
+		addspeed = wishspeed - currentspeed;
+		if (addspeed <= 0) {
+			return;
+		}
+		accelspeed = accel*pml.frametime*wishspeed;
+		if (accelspeed > addspeed) {
+			accelspeed = addspeed;
+		}
+
+		for (i=0 ; i<3 ; i++) {
+			pm->ps->velocity[i] += accelspeed*wishdir[i];
+		}
+	}
+	else {
+		// proper way (avoids strafe jump maxspeed bug), but feels bad
+		vec3_t		wishVelocity;
+		vec3_t		pushDir;
+		float		pushLen;
+		float		canPush;
+
+		VectorScale( wishdir, wishspeed, wishVelocity );
+		VectorSubtract( wishVelocity, pm->ps->velocity, pushDir );
+		pushLen = VectorNormalize( pushDir );
+
+		canPush = accel*pml.frametime*wishspeed;
+		if (canPush > pushLen) {
+			canPush = pushLen;
+		}
+
+		VectorMA( pm->ps->velocity, canPush, pushDir, pm->ps->velocity );
+	}
+}
+
+
+/*
+==============
+PM_Accelerate
 
 Handles user intended acceleration
 ==============
@@ -260,9 +314,9 @@ static void PM_Accelerate( vec3_t wishdir, float wishspeed, float accel )
 
 		currentspeed = DotProduct (pm->ps->velocity, wishdir);
 		addspeed = wishspeed - currentspeed;
-		if (addspeed <= 0) {
+		
+		if (addspeed <= 0)
 			return;
-		}
 		accelspeed = accel*pml.frametime*wishspeed;
 		if (accelspeed > addspeed) {
 			accelspeed = addspeed;
@@ -412,7 +466,23 @@ static qboolean PM_CheckJump( void )
 	pm->ps->pm_flags |= PMF_JUMP_HELD;
 
 	pm->ps->groundEntityNum = ENTITYNUM_NONE;
-	pm->ps->velocity[2] = JUMP_VELOCITY;
+	
+	// Double jump
+	if (g_promode.integer) {
+		if (pm->ps->stats[STAT_DOUBLE_JUMP_TIME] > 0)
+			pm->ps->velocity[2] += 100;
+		pm->ps->stats[STAT_DOUBLE_JUMP_TIME] = 400;
+	}
+
+	// Ramp boost
+	if (g_promode.integer) {
+		pm->ps->velocity[2] += JUMP_VELOCITY;
+		if (pm->ps->velocity[2] < JUMP_VELOCITY)
+			pm->ps->velocity[2] = JUMP_VELOCITY;
+	}
+	else
+		pm->ps->velocity[2] = JUMP_VELOCITY;
+
 	PM_AddEvent( EV_JUMP );
 
 	if ( pm->cmd.forwardmove >= 0 ) {
@@ -639,6 +709,8 @@ static void PM_AirMove( void )
 	float		wishspeed;
 	float		scale;
 	usercmd_t	cmd;
+	float		zvelocity;
+	float		speed;
 
 	PM_Friction();
 
@@ -667,8 +739,30 @@ static void PM_AirMove( void )
 	wishspeed *= scale;
 
 	// not on ground, so little effect on velocity
-	PM_Accelerate (wishdir, wishspeed, pm_airaccelerate);
+	if ( g_promode.integer && pm->cmd.rightmove != 0 && pm->cmd.forwardmove == 0 )
+		PM_StrafeAccelerate (wishdir, wishspeed, pm_strafeaccelerate);
+	else
+		PM_Accelerate (wishdir, wishspeed, pm_airaccelerate);
+	
+	// Air control
+	if (g_promode.integer && pm->cmd.rightmove == 0 && pm->cmd.forwardmove != 0) {
+		if ( (wishspeed - DotProduct (pm->ps->velocity, wishdir)) <= 0 ) {
+			zvelocity = pm->ps->velocity[2];
+			pm->ps->velocity[2] = 0;
 
+			speed = VectorLength(pm->ps->velocity);
+
+			pm->ps->velocity[0] += wishdir[0] * speed * pm_aircontrol;
+			pm->ps->velocity[1] += wishdir[1] * speed * pm_aircontrol;
+			VectorNormalize(pm->ps->velocity);
+
+			for (i=0 ; i<2 ; i++)
+				pm->ps->velocity[i] = speed*pm->ps->velocity[i];
+
+			pm->ps->velocity[2] = zvelocity;
+		}
+	}
+	
 	// we may have a ground plane that is very steep, even
 	// though we don't have a groundentity
 	// slide along the steep plane
@@ -804,10 +898,16 @@ static void PM_WalkMove( void )
 	// when a player gets hit, they temporarily lose
 	// full control, which allows them to be moved a bit
 	if ( ( pml.groundTrace.surfaceFlags & SURF_SLICK ) || pm->ps->pm_flags & PMF_TIME_KNOCKBACK ) {
-		accelerate = pm_airaccelerate;
+		if ( g_promode.integer )
+			accelerate = pm_accelerate;
+		else		
+			accelerate = pm_airaccelerate;
 	}
 	else {
-		accelerate = pm_accelerate;
+		if ( g_promode.integer )
+			accelerate = pm_cpmaccelerate;
+		else
+			accelerate = pm_accelerate;
 	}
 
 	PM_Accelerate (wishdir, wishspeed, accelerate);
@@ -1909,6 +2009,14 @@ static void PM_DropTimers( void )
 		pm->ps->torsoTimer -= pml.msec;
 		if ( pm->ps->torsoTimer < 0 ) {
 			pm->ps->torsoTimer = 0;
+		}
+	}
+
+	// drop post-jump counter
+	if ( pm->ps->stats[STAT_DOUBLE_JUMP_TIME] > 0 ) {
+		pm->ps->stats[STAT_DOUBLE_JUMP_TIME] -= pml.msec;
+		if ( pm->ps->stats[STAT_DOUBLE_JUMP_TIME] < 0 ) {
+			pm->ps->stats[STAT_DOUBLE_JUMP_TIME] = 0;
 		}
 	}
 }

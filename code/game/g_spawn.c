@@ -167,6 +167,8 @@ void SP_target_kill (gentity_t *ent);
 void SP_target_position (gentity_t *ent);
 void SP_target_location (gentity_t *ent);
 void SP_target_push (gentity_t *ent);
+void SP_target_starttimer (gentity_t *ent);
+void SP_target_stoptimer (gentity_t *ent);
 
 void SP_light (gentity_t *self);
 void SP_info_null (gentity_t *self);
@@ -252,6 +254,8 @@ spawn_t	spawns[] = {
 	{"target_position", SP_target_position},
 	{"target_location", SP_target_location},
 	{"target_push", SP_target_push},
+	{"target_startTimer", SP_target_starttimer},
+	{"target_stopTimer", SP_target_stoptimer},
 
 	{"light", SP_light},
 	{"path_corner", SP_path_corner},

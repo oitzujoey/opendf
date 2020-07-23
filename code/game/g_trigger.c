@@ -41,11 +41,26 @@ void multi_wait( gentity_t *ent )
 }
 
 
+/* OpenDF *
+ This is going to change a large part of the multi_trigger function.
+ What I am going to do is instead of freeing single-triggered entities, I will
+ treat them the same as multi-triggered entities. They difference between the two
+ will now be that a test is run that checks if the activator has triggered it
+ already during the current life. If he has, then multi_trigger will return
+ without event. If possible, it might be wise to move all the timing variables
+ into the activator entity to keep the data organized. I may be able to do the
+ same with multi-triggered entities in order to separate the players' games from
+ each other.
+  — Joey
+*/
+
 // the trigger was just activated
 // ent->activator should be set to the activator so it can be held through a delay
 // so wait for the delay time before firing
 void multi_trigger( gentity_t *ent, gentity_t *activator )
 {
+	qboolean *activatorNum = NULL;
+
 	ent->activator = activator;
 	if ( ent->nextthink ) {
 		return;		// can't retrigger until the wait is over
@@ -60,6 +75,10 @@ void multi_trigger( gentity_t *ent, gentity_t *activator )
 			activator->client->sess.sessionTeam != TEAM_BLUE ) {
 			return;
 		}
+		// This client has already triggered this entity.
+		activatorNum = &activator->client->triggeredEntities[activator->client->ps.clientNum];
+		if ( ent->wait == -1 && *activatorNum )
+			return;
 	}
 
 	G_UseTargets (ent, ent->activator);
@@ -69,11 +88,16 @@ void multi_trigger( gentity_t *ent, gentity_t *activator )
 		ent->nextthink = level.time + ( ent->wait + ent->random * crandom() ) * 1000;
 	}
 	else {
-		// we can't just remove (self) here, because this is a touch function
-		// called while looping through area links...
-		ent->touch = 0;
+		// // we can't just remove (self) here, because this is a touch function
+		// // called while looping through area links...
+		// ent->touch = 0;
+		// I could see there being a problem where two players triggering at the
+		// same time could be problematic.
 		ent->nextthink = level.time + FRAMETIME;
-		ent->think = G_FreeEntity;
+		// ent->think = G_FreeEntity;
+		ent->think = multi_wait;
+		if ( activatorNum )
+			*activatorNum = qtrue;
 	}
 }
 

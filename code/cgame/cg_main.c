@@ -305,6 +305,9 @@ vmCvar_t cg_missionpackChecks;
 vmCvar_t cg_developer;
 /* /Neon_Knight */
 
+/* opendf */
+vmCvar_t g_promode;
+
 typedef struct {
 	vmCvar_t *vmCvar;
 	char *cvarName;

@@ -629,6 +629,8 @@ int Q_isnan( float x );
 //=============================================
 
 float Com_Clamp( float min, float max, float value );
+#define max(a, b)   (a) > (b) ? (a) : (b)
+#define min(a, b)   (a) < (b) ? (a) : (b)
 
 char	*COM_SkipPath( char *pathname );
 const char	*COM_GetExtension( const char *name );

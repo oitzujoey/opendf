@@ -253,49 +253,49 @@ PM_ProModeAccelerate
 Handles user intended acceleration
 ==============
 */
-static void PM_StrafeAccelerate( vec3_t wishdir, float wishspeed, float accel )
-{
-	if(! (pm->pmove_flags & DF_NO_BUNNY) ) {
-		// q2 style
-		int			i;
-		float		addspeed, accelspeed, currentspeed;
+// static void PM_StrafeAccelerate( vec3_t wishdir, float wishspeed, float accel )
+// {
+// 	if(! (pm->pmove_flags & DF_NO_BUNNY) ) {
+// 		// q2 style
+// 		int			i;
+// 		float		addspeed, accelspeed, currentspeed;
 
-		if (wishspeed > 30)
-			wishspeed = 30;
+// 		if (wishspeed > 30)
+// 			wishspeed = 30;
 
-		currentspeed = DotProduct (pm->ps->velocity, wishdir);
-		addspeed = wishspeed - currentspeed;
-		if (addspeed <= 0) {
-			return;
-		}
-		accelspeed = accel*pml.frametime*wishspeed;
-		if (accelspeed > addspeed) {
-			accelspeed = addspeed;
-		}
+// 		currentspeed = DotProduct (pm->ps->velocity, wishdir);
+// 		addspeed = wishspeed - currentspeed;
+// 		if (addspeed <= 0) {
+// 			return;
+// 		}
+// 		accelspeed = accel*pml.frametime*wishspeed;
+// 		if (accelspeed > addspeed) {
+// 			accelspeed = addspeed;
+// 		}
 
-		for (i=0 ; i<3 ; i++) {
-			pm->ps->velocity[i] += accelspeed*wishdir[i];
-		}
-	}
-	else {
-		// proper way (avoids strafe jump maxspeed bug), but feels bad
-		vec3_t		wishVelocity;
-		vec3_t		pushDir;
-		float		pushLen;
-		float		canPush;
+// 		for (i=0 ; i<3 ; i++) {
+// 			pm->ps->velocity[i] += accelspeed*wishdir[i];
+// 		}
+// 	}
+// 	else {
+// 		// proper way (avoids strafe jump maxspeed bug), but feels bad
+// 		vec3_t		wishVelocity;
+// 		vec3_t		pushDir;
+// 		float		pushLen;
+// 		float		canPush;
 
-		VectorScale( wishdir, wishspeed, wishVelocity );
-		VectorSubtract( wishVelocity, pm->ps->velocity, pushDir );
-		pushLen = VectorNormalize( pushDir );
+// 		VectorScale( wishdir, wishspeed, wishVelocity );
+// 		VectorSubtract( wishVelocity, pm->ps->velocity, pushDir );
+// 		pushLen = VectorNormalize( pushDir );
 
-		canPush = accel*pml.frametime*wishspeed;
-		if (canPush > pushLen) {
-			canPush = pushLen;
-		}
+// 		canPush = accel*pml.frametime*wishspeed;
+// 		if (canPush > pushLen) {
+// 			canPush = pushLen;
+// 		}
 
-		VectorMA( pm->ps->velocity, canPush, pushDir, pm->ps->velocity );
-	}
-}
+// 		VectorMA( pm->ps->velocity, canPush, pushDir, pm->ps->velocity );
+// 	}
+// }
 
 
 /*
@@ -693,6 +693,99 @@ static void PM_FlyMove( void )
 	PM_StepSlideMove( qfalse );
 }
 
+/*
+===================
+CL_IsMoveInDirection
+
+Copied from Xonotic Darkpaces (GPLv2+) and adapted for OpenArena
+===================
+*/
+static vec_t CL_IsMoveInDirection(vec_t forward, vec_t side, vec_t angle)
+{
+	if(forward == 0 && side == 0)
+		return 0; // avoid division by zero
+	angle -= RAD2DEG(atan2(side, forward));
+	angle = (((angle + 180) - 360.0 * floor((angle + 180) / 360.0)) - 180) / 45;
+	if(angle >  1)
+		return 0;
+	if(angle < -1)
+		return 0;
+	return 1 - fabs(angle);
+}
+
+/*
+===================
+CL_ClientMovement_Physics_CPM_PM_Aircontrol
+
+Copied from Xonotic Darkpaces (GPLv2+) and adapted for OpenArena
+===================
+*/
+static void CL_ClientMovement_Physics_CPM_PM_Aircontrol(vec3_t wishdir, vec_t wishspeed)
+{
+	vec_t zspeed, speed, dot, k;
+
+#if 0
+	// this doesn't play well with analog input
+	if(s->cmd.forwardmove == 0 || s->cmd.sidemove != 0)
+		return;
+	k = 32;
+#else
+	k = 32 * (2 * CL_IsMoveInDirection(pm->cmd.forwardmove, pm->cmd.rightmove, 0) - 1);
+	if(k <= 0)
+		return;
+#endif
+
+	// k *= bound(0, wishspeed / 30, 1);
+
+	zspeed = pm->ps->velocity[2];
+	pm->ps->velocity[2] = 0;
+	// speed = VectorNormalizeLength(pm->ps->velocity);
+	speed = VectorNormalize(pm->ps->velocity);
+
+	dot = DotProduct(pm->ps->velocity, wishdir);
+
+	if(dot > 0) { // we can't change direction while slowing down
+		k *= dot*dot*pml.frametime;
+		// speed = max(0, speed - cl.movevars_aircontrol_penalty * sqrt(max(0, 1 - dot*dot)) * k/32);
+		k *= 150;
+		// VectorMAM(speed, s->velocity, k, wishdir, s->velocity);
+		VectorMA(vec3_origin, speed, pm->ps->velocity, pm->ps->velocity);
+		VectorMA(pm->ps->velocity, k, wishdir, pm->ps->velocity);
+		VectorNormalize(pm->ps->velocity);
+	}
+
+	VectorScale(pm->ps->velocity, speed, pm->ps->velocity);
+	pm->ps->velocity[2] = zspeed;
+}
+
+/*
+===================
+CL_GeomLerp
+
+Copied from Xonotic Darkpaces (GPLv2+) and adapted for OpenArena
+===================
+*/
+static vec_t CL_GeomLerp(vec_t a, vec_t lerp, vec_t b)
+{
+	if(a == 0)
+	{
+		if(lerp < 1)
+			return 0;
+		else
+			return b;
+	}
+	if(b == 0)
+	{
+		if(lerp > 0)
+			return 0;
+		else
+			return a;
+	}
+	// return a * pow(fabs(b / a), lerp);
+	return a + (b - a) * lerp;
+}
+
+
 
 /*
 ===================
@@ -706,11 +799,11 @@ static void PM_AirMove( void )
 	vec3_t		wishvel;
 	float		fmove, smove;
 	vec3_t		wishdir;
-	float		wishspeed;
+	float		wishspeed, wishspeed2;
 	float		scale;
 	usercmd_t	cmd;
-	float		zvelocity;
-	float		speed;
+	vec_t       accel = 1;
+	vec_t       strafity;
 
 	PM_Friction();
 
@@ -738,30 +831,32 @@ static void PM_AirMove( void )
 	wishspeed = VectorNormalize(wishdir);
 	wishspeed *= scale;
 
-	// not on ground, so little effect on velocity
-	if ( g_promode.integer && pm->cmd.rightmove != 0 && pm->cmd.forwardmove == 0 )
-		PM_StrafeAccelerate (wishdir, wishspeed, pm_strafeaccelerate);
-	else
-		PM_Accelerate (wishdir, wishspeed, pm_airaccelerate);
+	// Start Xonotic snippet.
+	wishspeed2 = wishspeed;
 	
-	// Air control
-	if (g_promode.integer && pm->cmd.rightmove == 0 && pm->cmd.forwardmove != 0) {
-		if ( (wishspeed - DotProduct (pm->ps->velocity, wishdir)) <= 0 ) {
-			zvelocity = pm->ps->velocity[2];
-			pm->ps->velocity[2] = 0;
-
-			speed = VectorLength(pm->ps->velocity);
-
-			pm->ps->velocity[0] += wishdir[0] * speed * pm_aircontrol;
-			pm->ps->velocity[1] += wishdir[1] * speed * pm_aircontrol;
-			VectorNormalize(pm->ps->velocity);
-
-			for (i=0 ; i<2 ; i++)
-				pm->ps->velocity[i] = speed*pm->ps->velocity[i];
-
-			pm->ps->velocity[2] = zvelocity;
-		}
+	// CPM: air control
+	if(g_promode.integer != 0)
+	{
+		vec3_t curdir;
+		curdir[0] = pm->ps->velocity[0];
+		curdir[1] = pm->ps->velocity[1];
+		curdir[2] = 0;
+		VectorNormalize(curdir);
+		accel = accel + (2.5 - accel) * max(0, -DotProduct(curdir, wishdir));
 	}
+	strafity = CL_IsMoveInDirection(pm->cmd.forwardmove, pm->cmd.rightmove, -90) + CL_IsMoveInDirection(pm->cmd.forwardmove, pm->cmd.rightmove, +90); // if one is nonzero, other is always zero
+	if(g_promode.integer != 0) {
+		wishspeed = min(wishspeed, CL_GeomLerp(320, strafity, 30));
+		accel = CL_GeomLerp(1, strafity, 70);
+	}
+	// !CPM
+	
+	PM_Accelerate (wishdir, wishspeed, accel);
+	// CL_ClientMovement_Physics_PM_Accelerate(s, wishdir, wishspeed, wishspeed0, accel, accelqw, cl.movevars_airaccel_qw_stretchfactor, cl.movevars_airaccel_sideways_friction / cl.movevars_maxairspeed, cl.movevars_airspeedlimit_nonqw);
+
+	if(g_promode.integer != 0)
+		CL_ClientMovement_Physics_CPM_PM_Aircontrol(wishdir, wishspeed2);
+	// End Xonotic snippet.
 	
 	// we may have a ground plane that is very steep, even
 	// though we don't have a groundentity
